@@ -1,0 +1,33 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install homeassistant
+      - name: Validate manifest
+        run: |
+          python3 -c "
+          import json
+          import sys
+          with open('custom_components/anova_ble/manifest.json') as f:
+            manifest = json.load(f)
+          required = ['domain', 'name', 'version', 'codeowners']
+          missing = [r for r in required if r not in manifest]
+          if missing:
+            print(f'Missing required keys: {missing}')
+            sys.exit(1)
+          print('Manifest is valid')
+          "
+

@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anova Precision Cooker (BLE)",
+        "description": "Suche nach Anova-Geräten..."
+      },
+      "discover": {
+        "title": "Anova Precision Cooker (BLE)",
+        "description": "Suche nach Anova-Geräten...",
+        "progress": "Suche nach Bluetooth-Geräten"
+      },
+      "user_select": {
+        "title": "Anova Precision Cooker (BLE)",
+        "description": "Wählen Sie Ihr Anova-Gerät aus der Liste aus",
+        "data": {
+          "address": "Gerät",
+          "manual_entry": "Manuelle Eingabe"
+        }
+      },
+      "manual": {
+        "title": "Manuelle Geräte-Eingabe",
+        "description": "Geben Sie die MAC-Adresse Ihres Anova-Geräts ein",
+        "data": {
+          "address": "MAC-Adresse (z.B. AA:BB:CC:DD:EE:FF)",
+          "name": "Gerätename"
+        }
+      }
+    },
+    "error": {
+      "no_devices_found": "Keine Anova-Geräte gefunden. Stellen Sie sicher, dass das Gerät eingeschaltet und in der Nähe ist. Sie können auch die MAC-Adresse manuell eingeben.",
+      "invalid_address": "Ungültige MAC-Adresse. Bitte geben Sie eine gültige BLE-Adresse ein."
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits konfiguriert"
+    }
+  }
+}
+
