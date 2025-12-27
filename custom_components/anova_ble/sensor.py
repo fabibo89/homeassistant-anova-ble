@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .ble_client import AnovaBLEClient
-from .const import DOMAIN, STATUS_RUNNING, STATUS_TEMP, STATUS_TIMER, STATUS_UNITS
+from .const import DOMAIN, STATUS_RUNNING, STATUS_TEMP, STATUS_TARGET_TEMP, STATUS_TIMER, STATUS_UNITS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -124,6 +124,9 @@ class AnovaTemperatureSensor(AnovaSensorBase):
     @property
     def native_value(self) -> float | None:
         """Return the current temperature."""
+        if self.coordinator.data is None:
+            return None
+        
         status = self.coordinator.data
         units = status.get(STATUS_UNITS, "C")
         temp = status.get(STATUS_TEMP)
@@ -154,6 +157,9 @@ class AnovaTargetTemperatureSensor(AnovaSensorBase):
     @property
     def native_value(self) -> float | None:
         """Return the target temperature."""
+        if self.coordinator.data is None:
+            return None
+        
         status = self.coordinator.data
         units = status.get(STATUS_UNITS, "C")
         temp = status.get(STATUS_TARGET_TEMP)
@@ -183,6 +189,8 @@ class AnovaTimerSensor(AnovaSensorBase):
     @property
     def native_value(self) -> int | None:
         """Return the remaining timer in minutes."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get(STATUS_TIMER)
 
 
@@ -200,6 +208,8 @@ class AnovaRunningSensor(AnovaSensorBase):
     @property
     def native_value(self) -> str:
         """Return the running state."""
+        if self.coordinator.data is None:
+            return "off"
         running = self.coordinator.data.get(STATUS_RUNNING, False)
         return "on" if running else "off"
 
@@ -218,5 +228,7 @@ class AnovaUnitsSensor(AnovaSensorBase):
     @property
     def native_value(self) -> str | None:
         """Return the temperature units."""
+        if self.coordinator.data is None:
+            return "C"
         return self.coordinator.data.get(STATUS_UNITS, "C")
 

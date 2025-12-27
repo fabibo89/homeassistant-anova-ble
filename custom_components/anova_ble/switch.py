@@ -74,6 +74,8 @@ class AnovaRunningSwitch(AnovaSwitchBase):
     @property
     def is_on(self) -> bool:
         """Return if the cooker is running."""
+        if self.coordinator.data is None:
+            return False
         return self.coordinator.data.get(STATUS_RUNNING, False)
 
     async def async_turn_on(self, **kwargs: Any) -> None:

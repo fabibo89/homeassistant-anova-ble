@@ -72,6 +72,9 @@ class AnovaClimate(CoordinatorEntity, ClimateEntity):
     @property
     def current_temperature(self) -> float | None:
         """Return the current temperature."""
+        if self.coordinator.data is None:
+            return None
+        
         status = self.coordinator.data
         units = status.get(STATUS_UNITS, "C")
         temp = status.get(STATUS_TEMP)
@@ -87,6 +90,9 @@ class AnovaClimate(CoordinatorEntity, ClimateEntity):
     @property
     def target_temperature(self) -> float | None:
         """Return the target temperature."""
+        if self.coordinator.data is None:
+            return None
+        
         status = self.coordinator.data
         units = status.get(STATUS_UNITS, "C")
         temp = status.get(STATUS_TARGET_TEMP)
@@ -102,6 +108,9 @@ class AnovaClimate(CoordinatorEntity, ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode:
         """Return the current HVAC mode."""
+        if self.coordinator.data is None:
+            return HVACMode.OFF
+        
         running = self.coordinator.data.get(STATUS_RUNNING, False)
         return HVACMode.HEAT if running else HVACMode.OFF
 

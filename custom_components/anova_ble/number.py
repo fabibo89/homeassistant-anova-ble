@@ -83,6 +83,9 @@ class AnovaTargetTemperatureNumber(AnovaNumberBase):
     @property
     def native_value(self) -> float | None:
         """Return the current target temperature."""
+        if self.coordinator.data is None:
+            return None
+        
         status = self.coordinator.data
         units = status.get(STATUS_UNITS, "C")
         temp = status.get(STATUS_TARGET_TEMP)
@@ -128,6 +131,8 @@ class AnovaTimerNumber(AnovaNumberBase):
     @property
     def native_value(self) -> int | None:
         """Return the current timer value."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get(STATUS_TIMER)
 
     async def async_set_native_value(self, value: float) -> None:
