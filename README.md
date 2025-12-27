@@ -1,7 +1,7 @@
 # Anova Precision Cooker BLE Integration für Home Assistant
 
-[![GitHub release](https://img.shields.io/github/release/fabianbosch/homeassistant-anova-ble.svg)](https://github.com/fabianbosch/homeassistant-anova-ble/releases)
-[![License](https://img.shields.io/github/license/fabianbosch/homeassistant-anova-ble.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/release/fabibo89/homeassistant-anova-ble.svg)](https://github.com/fabibo89/homeassistant-anova-ble/releases)
+[![License](https://img.shields.io/github/license/fabibo89/homeassistant-anova-ble.svg)](LICENSE)
 
 Diese Integration ermöglicht die Steuerung von Anova Precision Cooker Modellen A2/A3 über Bluetooth Low Energy (BLE) in Home Assistant.
 
@@ -31,7 +31,7 @@ Diese Integration ermöglicht die Steuerung von Anova Precision Cooker Modellen 
 2. Gehen Sie zu **Integrations**
 3. Klicken Sie auf **⋮** (drei Punkte) → **Custom repositories**
 4. Fügen Sie dieses Repository hinzu:
-   - Repository: `https://github.com/fabianbosch/homeassistant-anova-ble`
+   - Repository: `https://github.com/fabibo89/homeassistant-anova-ble`
    - Category: **Integration**
 5. Suchen Sie nach "Anova Precision Cooker (BLE)" und installieren Sie es
 
@@ -176,7 +176,7 @@ Dieses Projekt ist unter der MIT-Lizenz lizenziert.
 
 ## Support
 
-Bei Problemen oder Fragen erstellen Sie bitte ein [Issue](https://github.com/fabianbosch/homeassistant-anova-ble/issues) im Repository.
+Bei Problemen oder Fragen erstellen Sie bitte ein [Issue](https://github.com/fabibo89/homeassistant-anova-ble/issues) im Repository.
 
 ## Credits
 
