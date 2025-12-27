@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -55,7 +56,7 @@ class AnovaDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=10,  # Update every 10 seconds
+            update_interval=timedelta(seconds=10),  # Update every 10 seconds
         )
         self.client = client
 
