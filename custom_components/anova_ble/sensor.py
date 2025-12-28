@@ -65,16 +65,24 @@ class AnovaDataUpdateCoordinator(DataUpdateCoordinator):
         # Ensure we're connected
         if not self.client.is_connected:
             _LOGGER.info("Not connected, attempting to reconnect...")
-            await self.client.connect(retries=1, timeout=5.0)
+            try:
+                connected = await self.client.connect(retries=2, timeout=10.0)
+                if not connected:
+                    _LOGGER.warning("Reconnection attempt failed")
+            except Exception as reconnect_error:
+                _LOGGER.error("Reconnection error: %s", reconnect_error, exc_info=True)
         
         if not self.client.is_connected:
-            _LOGGER.debug("Still not connected, returning cached status")
+            _LOGGER.debug("Still not connected, returning cached status: %s", self.client.status)
             return self.client.status
         
         try:
-            return await self.client.get_status()
+            _LOGGER.debug("Fetching status from device...")
+            status = await self.client.get_status()
+            _LOGGER.debug("Received status: %s", status)
+            return status
         except Exception as e:
-            _LOGGER.warning("Error getting status: %s. Returning cached status.", e)
+            _LOGGER.warning("Error getting status: %s. Returning cached status.", e, exc_info=True)
             # Mark as disconnected so we retry connection next time
             self.client._connected = False
             return self.client.status

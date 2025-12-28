@@ -10,6 +10,9 @@ ANOVA_DEVICE_NAME_PREFIX = "Anova"
 
 # Command prefixes
 CMD_GET_STATUS = "status"
+CMD_READ_TARGET_TEMP = "read set temp"
+CMD_READ_CURRENT_TEMP = "read temp"
+CMD_READ_UNIT = "read unit"
 CMD_SET_TEMP = "set temp "
 CMD_SET_TIMER = "set timer "
 CMD_START = "start"

@@ -160,6 +160,32 @@ logger:
     custom_components.anova_ble: debug
 ```
 
+### Docker-Logs (für Docker-Installationen)
+
+Wenn Sie Home Assistant in Docker betreiben, können Sie die Logs direkt aus dem Container abrufen:
+
+```bash
+# Live-Logs gefiltert nach anova (am nützlichsten für Debugging)
+docker logs -f homeassistant-dev 2>&1 | grep -i anova
+
+# Nur die letzten 200 Zeilen mit anova
+docker logs --tail 200 homeassistant-dev 2>&1 | grep -i anova
+
+# Alle relevanten BLE/Anova Logger gleichzeitig
+docker logs -f homeassistant-dev 2>&1 | grep -iE "anova|habluetooth|bleak"
+
+# Mit Zeitstempel
+docker logs -f --timestamps homeassistant-dev 2>&1 | grep -i anova
+
+# Nur Fehler und Warnungen
+docker logs -f homeassistant-dev 2>&1 | grep -iE "ERROR.*anova|WARNING.*anova"
+
+# Komplette Logs ohne Filter (falls du alles sehen willst)
+docker logs -f homeassistant-dev
+```
+
+**Hinweis:** Ersetzen Sie `homeassistant-dev` durch den Namen Ihres Home Assistant Containers (z.B. `homeassistant`).
+
 ## Bekannte Einschränkungen
 
 - Die Integration unterstützt derzeit nur A2/A3 Modelle
