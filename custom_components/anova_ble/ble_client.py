@@ -244,8 +244,14 @@ class AnovaBLEClient:
         self._connected = False
         _LOGGER.info("Disconnected from Anova device")
 
-    async def _send_command(self, command: str, timeout: float = 10.0) -> str | None:
-        """Send a command to the device and wait for response."""
+    async def _send_command(self, command: str, timeout: float = 10.0, expect_response: bool = True) -> str | None:
+        """Send a command to the device and wait for response.
+        
+        Args:
+            command: The command to send
+            timeout: Timeout in seconds
+            expect_response: Whether to wait for a response (False for set commands)
+        """
         if not self.is_connected:
             _LOGGER.debug("Not connected to device, attempting reconnection...")
             # Try to reconnect
@@ -256,11 +262,6 @@ class AnovaBLEClient:
 
         async with self._lock:
             try:
-                # Create event for response
-                self._response_event = asyncio.Event()
-                self._response_data = None
-                self._response_parts = []
-
                 # Send command (Anova commands should end with \r according to documentation)
                 _LOGGER.debug("Sending command: %s", command)
                 command_with_terminator = command + "\r"
@@ -268,6 +269,16 @@ class AnovaBLEClient:
                 await self._client.write_gatt_char(
                     ANOVA_CHARACTERISTIC_UUID, command_bytes, response=True
                 )
+                
+                # For set commands, don't wait for response - they typically don't send one
+                if not expect_response:
+                    _LOGGER.debug("Set command sent, not waiting for response")
+                    return "OK"  # Return a success indicator
+                
+                # Create event for response (only for read commands)
+                self._response_event = asyncio.Event()
+                self._response_data = None
+                self._response_parts = []
 
                 # Wait for notification responses - collect multiple notifications
                 # The device may send status data in multiple notifications
@@ -451,50 +462,74 @@ class AnovaBLEClient:
     async def set_temperature(self, temperature: float) -> bool:
         """Set target temperature."""
         command = f"{CMD_SET_TEMP}{temperature:.1f}"
-        response = await self._send_command(command)
+        # Set commands don't return a response, just send and verify via status
+        response = await self._send_command(command, expect_response=False)
         if response:
-            await self.get_status()  # Refresh status
+            # Small delay to let device process the command
+            await asyncio.sleep(0.5)
+            # Verify by reading status
+            await self.get_status()
             return True
         return False
 
     async def set_timer(self, minutes: int) -> bool:
         """Set timer in minutes."""
         command = f"{CMD_SET_TIMER}{minutes}"
-        response = await self._send_command(command)
+        # Set commands don't return a response, just send and verify via status
+        response = await self._send_command(command, expect_response=False)
         if response:
-            await self.get_status()  # Refresh status
+            # Small delay to let device process the command
+            await asyncio.sleep(0.5)
+            # Verify by reading status
+            await self.get_status()
             return True
         return False
 
     async def start(self) -> bool:
         """Start the cooker."""
-        response = await self._send_command(CMD_START)
+        # Set commands don't return a response, just send and verify via status
+        response = await self._send_command(CMD_START, expect_response=False)
         if response:
-            await self.get_status()  # Refresh status
+            # Small delay to let device process the command
+            await asyncio.sleep(0.5)
+            # Verify by reading status
+            await self.get_status()
             return True
         return False
 
     async def stop(self) -> bool:
         """Stop the cooker."""
-        response = await self._send_command(CMD_STOP)
+        # Set commands don't return a response, just send and verify via status
+        response = await self._send_command(CMD_STOP, expect_response=False)
         if response:
-            await self.get_status()  # Refresh status
+            # Small delay to let device process the command
+            await asyncio.sleep(0.5)
+            # Verify by reading status
+            await self.get_status()
             return True
         return False
 
     async def set_units_celsius(self) -> bool:
         """Set temperature units to Celsius."""
-        response = await self._send_command(CMD_UNITS_C)
+        # Set commands don't return a response, just send and verify via status
+        response = await self._send_command(CMD_UNITS_C, expect_response=False)
         if response:
-            await self.get_status()  # Refresh status
+            # Small delay to let device process the command
+            await asyncio.sleep(0.5)
+            # Verify by reading status
+            await self.get_status()
             return True
         return False
 
     async def set_units_fahrenheit(self) -> bool:
         """Set temperature units to Fahrenheit."""
-        response = await self._send_command(CMD_UNITS_F)
+        # Set commands don't return a response, just send and verify via status
+        response = await self._send_command(CMD_UNITS_F, expect_response=False)
         if response:
-            await self.get_status()  # Refresh status
+            # Small delay to let device process the command
+            await asyncio.sleep(0.5)
+            # Verify by reading status
+            await self.get_status()
             return True
         return False
 

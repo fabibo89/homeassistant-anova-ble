@@ -105,6 +105,9 @@ automation:
 
 ## Technische Details
 
+### Dokumentation
+Diese Integration basiert auf der offiziellen [Anova Developer Documentation](https://developer.anovaculinary.com/docs/intro).
+
 ### BLE Protokoll
 Die Integration verwendet das textbasierte BLE-Protokoll der A2/A3 Modelle:
 - Service UUID: `0000ffe0-0000-1000-8000-00805f9b34fb`
@@ -194,7 +197,7 @@ docker logs -f homeassistant-dev
 
 ## Entwicklung
 
-Diese Integration basiert auf der [Anova Developer Documentation](https://developer.anovaculinary.com/docs/intro).
+Diese Integration basiert auf der offiziellen [Anova Developer Documentation](https://developer.anovaculinary.com/docs/intro).
 
 ## Lizenz
 
