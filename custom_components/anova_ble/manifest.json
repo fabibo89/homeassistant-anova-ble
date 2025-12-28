@@ -1,13 +1,19 @@
 {
   "domain": "anova_ble",
   "name": "Anova Precision Cooker (BLE)",
-  "codeowners": ["@fabibo89"],
+  "codeowners": [
+    "@fabibo89"
+  ],
   "config_flow": true,
-  "dependencies": ["bluetooth"],
+  "dependencies": [
+    "bluetooth"
+  ],
   "documentation": "https://github.com/fabibo89/homeassistant-anova-ble",
   "integration_type": "device",
   "iot_class": "local_push",
-  "requirements": ["bleak>=0.21.0", "bleak-retry-connector>=1.0.0"],
-  "version": "1.0.0"
+  "requirements": [
+    "bleak>=0.21.0",
+    "bleak-retry-connector>=1.0.0"
+  ],
+  "version": "0.0.5"
 }
-
