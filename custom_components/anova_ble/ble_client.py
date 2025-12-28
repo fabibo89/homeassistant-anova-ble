@@ -72,7 +72,7 @@ class AnovaBLEClient:
     def name(self) -> str:
         """Return device name."""
         return self._name
-x
+
     def _notification_handler(self, sender: int, data: bytearray) -> None:
         """Handle notifications from the device."""
         try:
