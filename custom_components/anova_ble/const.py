@@ -27,3 +27,9 @@ STATUS_TIMER = "timer"
 STATUS_RUNNING = "running"
 STATUS_UNITS = "units"
 
+# Connection states
+CONNECTION_STATE_CONNECTED = "connected"
+CONNECTION_STATE_CONNECTING = "connecting"
+CONNECTION_STATE_DISCONNECTED = "disconnected"
+
+MAX_CONNECTION_LOG_LINES = 25

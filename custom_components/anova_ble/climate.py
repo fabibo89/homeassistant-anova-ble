@@ -70,6 +70,11 @@ class AnovaClimate(CoordinatorEntity, ClimateEntity):
         }
 
     @property
+    def available(self) -> bool:
+        """Return True if the device is connected."""
+        return self._client.is_connected
+
+    @property
     def current_temperature(self) -> float | None:
         """Return the current temperature."""
         if self.coordinator.data is None:

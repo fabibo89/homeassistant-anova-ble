@@ -63,6 +63,11 @@ class AnovaNumberBase(CoordinatorEntity, NumberEntity):
         """Return the name of the number entity."""
         return f"{self._client.name} {self._number_type.replace('_', ' ').title()}"
 
+    @property
+    def available(self) -> bool:
+        """Return True if the device is connected."""
+        return self._client.is_connected
+
 
 class AnovaTargetTemperatureNumber(AnovaNumberBase):
     """Number entity for setting target temperature."""

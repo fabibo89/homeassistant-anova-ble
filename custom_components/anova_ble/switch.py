@@ -59,6 +59,11 @@ class AnovaSwitchBase(CoordinatorEntity, SwitchEntity):
         """Return the name of the switch."""
         return f"{self._client.name} {self._switch_type.replace('_', ' ').title()}"
 
+    @property
+    def available(self) -> bool:
+        """Return True if the device is connected."""
+        return self._client.is_connected
+
 
 class AnovaRunningSwitch(AnovaSwitchBase):
     """Switch entity for starting/stopping the cooker."""

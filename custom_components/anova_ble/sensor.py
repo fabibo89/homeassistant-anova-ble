@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
@@ -12,7 +13,8 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature, UnitOfTime
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -20,7 +22,16 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .ble_client import AnovaBLEClient
-from .const import DOMAIN, STATUS_RUNNING, STATUS_TEMP, STATUS_TARGET_TEMP, STATUS_TIMER, STATUS_UNITS
+from .const import (
+    CONNECTION_STATE_CONNECTING,
+    CONNECTION_STATE_DISCONNECTED,
+    DOMAIN,
+    STATUS_RUNNING,
+    STATUS_TEMP,
+    STATUS_TARGET_TEMP,
+    STATUS_TIMER,
+    STATUS_UNITS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +48,8 @@ async def async_setup_entry(
     ]
 
     sensors = [
+        AnovaConnectionStatusSensor(coordinator, client),
+        AnovaConnectionLogSensor(coordinator, client),
         AnovaTemperatureSensor(coordinator, client),
         AnovaTargetTemperatureSensor(coordinator, client),
         AnovaTimerSensor(coordinator, client),
@@ -62,30 +75,114 @@ class AnovaDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the device."""
-        # Ensure we're connected
         if not self.client.is_connected:
-            _LOGGER.info("Not connected, attempting to reconnect...")
-            try:
-                connected = await self.client.connect(retries=2, timeout=10.0)
-                if not connected:
-                    _LOGGER.warning("Reconnection attempt failed")
-            except Exception as reconnect_error:
-                _LOGGER.error("Reconnection error: %s", reconnect_error, exc_info=True)
-        
-        if not self.client.is_connected:
-            _LOGGER.debug("Still not connected, returning cached status: %s", self.client.status)
+            _LOGGER.debug("Not connected, skipping status update")
             return self.client.status
-        
+
         try:
             _LOGGER.debug("Fetching status from device...")
             status = await self.client.get_status()
             _LOGGER.debug("Received status: %s", status)
             return status
         except Exception as e:
-            _LOGGER.warning("Error getting status: %s. Returning cached status.", e, exc_info=True)
+            _LOGGER.debug("Error getting status: %s. Returning cached status.", e)
             # Mark as disconnected so we retry connection next time
             self.client._connected = False
             return self.client.status
+
+
+class AnovaDiagnosticEntity(SensorEntity):
+    """Base class for diagnostic sensors that stay available when offline."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: AnovaDataUpdateCoordinator,
+        client: AnovaBLEClient,
+        sensor_type: str,
+    ) -> None:
+        """Initialize the diagnostic sensor."""
+        self._coordinator = coordinator
+        self._client = client
+        self._sensor_type = sensor_type
+        self._attr_unique_id = f"{client.address}_{sensor_type}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, client.address)},
+            "name": client.name,
+            "manufacturer": "Anova",
+            "model": "Precision Cooker A2/A3",
+        }
+        self._remove_listener: Callable[[], None] | None = None
+
+    @property
+    def available(self) -> bool:
+        """Diagnostic sensors are always available."""
+        return True
+
+    async def async_added_to_hass(self) -> None:
+        """Register for connection state updates."""
+        await super().async_added_to_hass()
+        self._remove_listener = self._client.register_state_listener(
+            self._handle_state_update
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister listener."""
+        if self._remove_listener:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_state_update(self) -> None:
+        """Handle connection state changes."""
+        self.async_write_ha_state()
+
+
+class AnovaConnectionStatusSensor(AnovaDiagnosticEntity):
+    """Sensor showing the BLE connection state."""
+
+    _attr_icon = "mdi:bluetooth"
+
+    def __init__(
+        self,
+        coordinator: AnovaDataUpdateCoordinator,
+        client: AnovaBLEClient,
+    ) -> None:
+        """Initialize the connection status sensor."""
+        super().__init__(coordinator, client, "connection_status")
+        self._attr_name = f"{client.name} Connection Status"
+
+    @property
+    def native_value(self) -> str:
+        """Return the connection state."""
+        state = self._client.connection_state
+        if state == CONNECTION_STATE_DISCONNECTED:
+            return "disconnected"
+        if state == CONNECTION_STATE_CONNECTING:
+            return "connecting"
+        return "connected"
+
+
+class AnovaConnectionLogSensor(AnovaDiagnosticEntity):
+    """Sensor showing the connection log."""
+
+    _attr_icon = "mdi:text-box-outline"
+
+    def __init__(
+        self,
+        coordinator: AnovaDataUpdateCoordinator,
+        client: AnovaBLEClient,
+    ) -> None:
+        """Initialize the connection log sensor."""
+        super().__init__(coordinator, client, "connection_log")
+        self._attr_name = f"{client.name} Connection Log"
+
+    @property
+    def native_value(self) -> str:
+        """Return the connection log."""
+        log = self._client.connection_log
+        return log if log else "No connection attempts yet"
 
 
 class AnovaSensorBase(CoordinatorEntity, SensorEntity):
@@ -113,6 +210,11 @@ class AnovaSensorBase(CoordinatorEntity, SensorEntity):
     def name(self) -> str:
         """Return the name of the sensor."""
         return f"{self._client.name} {self._sensor_type.replace('_', ' ').title()}"
+
+    @property
+    def available(self) -> bool:
+        """Return True if the device is connected."""
+        return self._client.is_connected
 
 
 class AnovaTemperatureSensor(AnovaSensorBase):

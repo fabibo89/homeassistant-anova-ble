@@ -4,11 +4,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from bleak import BleakClient, BleakScanner
 from bleak.backends.device import BLEDevice
-from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
+from bleak_retry_connector import (
+    BleakNotFoundError,
+    BleakClientWithServiceCache,
+    establish_connection,
+)
 
 from .const import (
     ANOVA_CHARACTERISTIC_UUID,
@@ -24,6 +30,10 @@ from .const import (
     CMD_STOP,
     CMD_UNITS_C,
     CMD_UNITS_F,
+    CONNECTION_STATE_CONNECTED,
+    CONNECTION_STATE_CONNECTING,
+    CONNECTION_STATE_DISCONNECTED,
+    MAX_CONNECTION_LOG_LINES,
     STATUS_RUNNING,
     STATUS_TARGET_TEMP,
     STATUS_TEMP,
@@ -32,6 +42,23 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _is_device_unavailable_error(exc: BaseException) -> bool:
+    """Return True when the device is simply off, out of range, or not connectable."""
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError, BleakNotFoundError, ConnectionError)):
+        return True
+    message = str(exc).lower()
+    return any(
+        phrase in message
+        for phrase in (
+            "timeout",
+            "not found",
+            "failed to connect",
+            "device not found",
+            "was not found",
+        )
+    )
 
 
 class AnovaBLEClient:
@@ -50,6 +77,9 @@ class AnovaBLEClient:
         self._response_event: asyncio.Event | None = None
         self._response_data: str | None = None
         self._response_parts: list[str] = []
+        self._connection_state = CONNECTION_STATE_DISCONNECTED
+        self._connection_log: list[str] = []
+        self._state_listeners: list[Callable[[], None]] = []
         
         # Warn if placeholder address
         if "AA:BB:CC:DD:EE:FF" in address_upper or "00:00:00:00:00:00" in address_upper:
@@ -73,6 +103,73 @@ class AnovaBLEClient:
         """Return device name."""
         return self._name
 
+    @property
+    def connection_state(self) -> str:
+        """Return the current connection state."""
+        if self.is_connected:
+            return CONNECTION_STATE_CONNECTED
+        return self._connection_state
+
+    @property
+    def connection_log(self) -> str:
+        """Return the connection log as a multi-line string."""
+        return "\n".join(self._connection_log)
+
+    def register_state_listener(self, callback: Callable[[], None]) -> Callable[[], None]:
+        """Register a callback for connection state or log changes."""
+
+        def remove_listener() -> None:
+            if callback in self._state_listeners:
+                self._state_listeners.remove(callback)
+
+        self._state_listeners.append(callback)
+        return remove_listener
+
+    def _set_connection_state(self, state: str) -> None:
+        """Update connection state and notify listeners."""
+        if self._connection_state != state:
+            self._connection_state = state
+            self._notify_state_listeners()
+
+    def _log_connection(self, message: str, *, verbose: bool) -> None:
+        """Append a timestamped line to the connection log when verbose."""
+        if not verbose:
+            return
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self._connection_log.append(f"[{timestamp}] {message}")
+        if len(self._connection_log) > MAX_CONNECTION_LOG_LINES:
+            self._connection_log.pop(0)
+        self._notify_state_listeners()
+
+    def _notify_state_listeners(self) -> None:
+        """Notify registered listeners of state changes."""
+        for callback in self._state_listeners:
+            callback()
+
+    async def async_connect_manual(self) -> bool:
+        """Connect manually with detailed logging for the UI."""
+        if self.is_connected:
+            self._log_connection("Already connected", verbose=True)
+            return True
+
+        self._connection_log.clear()
+        self._set_connection_state(CONNECTION_STATE_CONNECTING)
+        self._log_connection("Starting connection...", verbose=True)
+
+        success = await self.connect(retries=3, timeout=10.0, verbose=True)
+
+        if success:
+            self._set_connection_state(CONNECTION_STATE_CONNECTED)
+            self._log_connection("Connected successfully", verbose=True)
+        else:
+            self._set_connection_state(CONNECTION_STATE_DISCONNECTED)
+            self._log_connection(
+                "Connection failed – is the device powered on and nearby?",
+                verbose=True,
+            )
+
+        return success
+
     def _notification_handler(self, sender: int, data: bytearray) -> None:
         """Handle notifications from the device."""
         try:
@@ -94,18 +191,32 @@ class AnovaBLEClient:
         except Exception as e:
             _LOGGER.error("Error handling notification: %s", e, exc_info=True)
 
-    async def connect(self, retries: int = 3, timeout: float = 10.0) -> bool:
+    async def connect(
+        self, retries: int = 3, timeout: float = 10.0, *, verbose: bool = False
+    ) -> bool:
         """Connect to the Anova device with retry logic using bleak-retry-connector."""
         if self.is_connected:
+            self._log_connection("Already connected", verbose=verbose)
             return True
+
+        if verbose:
+            self._set_connection_state(CONNECTION_STATE_CONNECTING)
         
         # Ensure minimum timeout of 10 seconds for establish_connection
         connection_timeout = max(timeout, 10.0)
         
         for attempt in range(1, retries + 1):
             try:
-                _LOGGER.info("Connecting to Anova device at %s (attempt %d/%d)...", 
-                            self._address, attempt, retries)
+                self._log_connection(
+                    f"Attempt {attempt}/{retries}: scanning for {self._address}...",
+                    verbose=verbose,
+                )
+                _LOGGER.debug(
+                    "Connecting to Anova device at %s (attempt %d/%d)...",
+                    self._address,
+                    attempt,
+                    retries,
+                )
                 
                 # Clean up any existing client
                 if self._client:
@@ -124,8 +235,10 @@ class AnovaBLEClient:
                 )
                 
                 if not device:
-                    _LOGGER.warning("Device %s not found in initial scan, trying manual scan...", 
-                                   self._address)
+                    self._log_connection(
+                        "Device not found in scan, trying extended scan...",
+                        verbose=verbose,
+                    )
                     # Try a manual scan as fallback
                     try:
                         scanner = BleakScanner()
@@ -133,15 +246,34 @@ class AnovaBLEClient:
                         await asyncio.sleep(3)  # Scan for 3 seconds
                         devices = await scanner.get_discovered_devices()
                         await scanner.stop()
-                        
+
                         for d in devices:
                             if d.address.upper() == self._address.upper():
                                 device = d
-                                _LOGGER.info("Found device in manual scan")
+                                self._log_connection(
+                                    "Device found in extended scan", verbose=verbose
+                                )
                                 break
                     except Exception as scan_error:
                         _LOGGER.debug("Manual scan also failed: %s", scan_error)
-                
+
+                if not device:
+                    self._log_connection(
+                        f"Device not reachable (attempt {attempt}/{retries})",
+                        verbose=verbose,
+                    )
+                    _LOGGER.debug(
+                        "Device %s not reachable (attempt %d/%d), may be off or out of range",
+                        self._address,
+                        attempt,
+                        retries,
+                    )
+                    if attempt < retries:
+                        await asyncio.sleep(2)
+                    continue
+
+                self._log_connection("Device found, establishing connection...", verbose=verbose)
+
                 # Use establish_connection for reliable connection
                 # Store device in a list to allow closure to access it properly
                 device_container = [device]
@@ -192,29 +324,47 @@ class AnovaBLEClient:
                     _LOGGER.warning("Could not enable notifications: %s. Continuing anyway...", notify_error)
                 
                 self._connected = True
+                self._set_connection_state(CONNECTION_STATE_CONNECTED)
+                self._log_connection("BLE connection established", verbose=verbose)
                 _LOGGER.info("Successfully connected to Anova device at %s", self._address)
                 
                 # Try to get initial status (don't fail if this doesn't work)
                 # Give it more time for the initial status
                 try:
+                    self._log_connection("Reading device status...", verbose=verbose)
                     await asyncio.wait_for(self.get_status(), timeout=10.0)
+                    self._log_connection("Status read successfully", verbose=verbose)
                 except asyncio.TimeoutError:
+                    self._log_connection("Timeout reading status (non-critical)", verbose=verbose)
                     _LOGGER.warning("Timeout getting initial status (this is non-critical)")
                 except Exception as status_error:
+                    self._log_connection(
+                        f"Could not read status: {status_error}", verbose=verbose
+                    )
                     _LOGGER.warning("Could not get initial status: %s", status_error)
                 
                 return True
                 
-            except asyncio.TimeoutError:
-                _LOGGER.warning("Connection timeout (attempt %d/%d)", attempt, retries)
-                if attempt < retries:
-                    await asyncio.sleep(2)  # Wait before retry
             except Exception as e:
-                _LOGGER.error("Connection attempt %d/%d failed: %s", attempt, retries, e, exc_info=True)
+                if _is_device_unavailable_error(e):
+                    self._log_connection(
+                        f"Connection failed: {e} (attempt {attempt}/{retries})",
+                        verbose=verbose,
+                    )
+                else:
+                    self._log_connection(
+                        f"Unexpected error: {e} (attempt {attempt}/{retries})",
+                        verbose=verbose,
+                    )
+                    _LOGGER.error(
+                        "Connection attempt %d/%d failed: %s",
+                        attempt,
+                        retries,
+                        e,
+                        exc_info=True,
+                    )
                 if attempt < retries:
                     await asyncio.sleep(2)  # Wait before retry
-                else:
-                    _LOGGER.error("Failed to connect to Anova device after %d attempts", retries)
             
             # Clean up on failure
             if self._client:
@@ -226,12 +376,21 @@ class AnovaBLEClient:
                 self._client = None
         
         self._connected = False
+        if verbose:
+            self._set_connection_state(CONNECTION_STATE_DISCONNECTED)
+        _LOGGER.debug(
+            "Could not connect to Anova device at %s after %d attempt(s); will retry later",
+            self._address,
+            retries,
+        )
         return False
     
     def _disconnected_callback(self, client: BleakClient) -> None:
         """Handle disconnection callback."""
-        _LOGGER.warning("Device disconnected: %s", self._address)
+        _LOGGER.debug("Device disconnected: %s", self._address)
         self._connected = False
+        self._set_connection_state(CONNECTION_STATE_DISCONNECTED)
+        self._log_connection("Device disconnected", verbose=True)
 
     async def disconnect(self) -> None:
         """Disconnect from the Anova device."""
@@ -242,7 +401,8 @@ class AnovaBLEClient:
                 pass
             await self._client.disconnect()
         self._connected = False
-        _LOGGER.info("Disconnected from Anova device")
+        self._set_connection_state(CONNECTION_STATE_DISCONNECTED)
+        _LOGGER.debug("Disconnected from Anova device")
 
     async def _send_command(self, command: str, timeout: float = 10.0, expect_response: bool = True) -> str | None:
         """Send a command to the device and wait for response.
@@ -257,7 +417,7 @@ class AnovaBLEClient:
             # Try to reconnect
             await self.connect(retries=1, timeout=5.0)
             if not self.is_connected:
-                _LOGGER.error("Not connected to device and reconnection failed")
+                _LOGGER.debug("Not connected to device and reconnection failed")
                 return None
 
         async with self._lock:
@@ -352,7 +512,7 @@ class AnovaBLEClient:
                     _LOGGER.debug("Direct read also failed: %s", read_error)
                     return None
             except Exception as e:
-                _LOGGER.error("Error sending command %s: %s", command, e, exc_info=True)
+                _LOGGER.warning("Error sending command %s: %s", command, e)
                 # Mark as disconnected if connection error
                 if "not connected" in str(e).lower() or "disconnect" in str(e).lower():
                     self._connected = False
